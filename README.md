@@ -32,11 +32,17 @@ Este é um projeto simples onde utilizei o Puppeteer para realizar scraping de i
   => _**npm install express puppeteer**_
 
 
+**Por último** Instalei o prompt que permite receber valores pelo teclado:
+_bash_
+  => _**npm install prompt-sync**_
+  
+
+
 **Depois de instalar  as dependência necessárias, criei dois arquivos javascript dentro da pasta  :**
 
 1.    "index.js" para a busca de produtos com base nos critérios Nutri-Score e NOVA;
 
-2.    "server.js" para a busca detalhada de produtos
+2.    "detl.js" para a busca detalhada de produtos
 
 
 # No arquivo 'index.js' vou adicionar o código do projeto para a busca de produtos com base nos critérios Nutri-Score e NOVA:
@@ -61,24 +67,37 @@ const puppeteer = require('puppeteer');
 ```
 
 
-  **//A página é navegada para a URL desejada, neste caso,"https://br.openfoodfacts.org/produto/${id}":**
+  **//A página é navegada para o produto pertencente ao ID que será atribuido no terminal ,"https://br.openfoodfacts.org/produto/${id}":**
   ```
-const id = '7898024394181';
+const entrada = require('prompt-sync')({sigint: true});
+  let id;
+
+  id = entrada("Digite ID: ");
+
+  console.log(`ID = ${id}`);
+
+
+  if (!id) {
+    return res.status(400).send('Por favor, forneça um ID válido.');
+  }
   await page.goto(`https://br.openfoodfacts.org/produto/${id}`);
   console.log('\nFui para a url!\n');
 ```
 
 
   **//Utilizando o Puppeteer, o conteúdo da página é avaliado e informações específicas são extraídas do DOM:**
+  try{
  ` const pageContent = await page.evaluate(() => {
 `
   **// Código para extrair informações da página:**
    ```
  return {
       name: document.querySelector('.title-1').innerText,
-      id: document.querySelector('#barcode').innerText,
-      score: document.querySelector('.attr_text').innerText,
-      nova: document.querySelector('.grade_e_title').innerText,
+        id: document.querySelector('#barcode').innerText,
+        score: document.querySelector('.grade_d_title.attr_title').innerText,
+        nova: document.querySelector('.grade_e_title.attr_title').innerText,
+        nutritionTitle: document.querySelector('.panel_title.grade_d').innerText,
+        novaTitle: document.querySelector('#panel_nova').innerText
     };
   });
 ```
@@ -92,14 +111,25 @@ const id = '7898024394181';
 
 **// ... (Detalhes do produto extraídos)**
   ```
-res.send({
-
-    "Código de barras": pageContent.id,
-    "name": pageContent.name,
-    "score": pageContent.score,
-    "Nova": pageContent.nova,
-
-  });
+res.json({
+      
+      id: pageContent.id,
+      name: pageContent.name,
+      nutrition: {
+        score: pageContent.score,
+        title: pageContent.nutritionTitle,
+      },
+      nova: {
+        score: pageContent.nova,
+        title: pageContent.novaTitle,
+      }
+      
+    });
+    **// ...Mensagem de erro**
+    } catch (error) {
+    console.error('Ocorreu um erro:', error);
+    res.status(500).send('Ocorreu um erro ao processar a solicitação.');
+  }
 });
 ```
 
@@ -126,7 +156,9 @@ app.listen(3000, () => {
 
 
 
-# No arquivo 'server.js' vou adicionar o código do projeto para a busca detalhada produtos:
+# No arquivo 'detl.js' vou adicionar o código do projeto para a busca detalhada produtos:
+
+//No detl.js atribuirei o id dentro do código;
 
 **//O script começa importando os módulos necessários: express para o servidor web, puppeteer para automação do navegador:**
 ```
@@ -167,15 +199,22 @@ const puppeteer = require('puppeteer');
     // Código para extrair informações da página:
    ```
  return {
-        title: document.querySelector('.title-1').innerText,
-        quantity: document.querySelector('#field_quantity_value').innerText,
-        category: document.querySelector('#field_categories_value').innerText,
-        ingredientsList: ingredientsList,
-        nutritionScore: document.querySelector('.grade_e_title').innerText,
-        values: document.querySelector('#panel_nutrient_levels_content').innerText,
-        servingSize: document.querySelector('#panel_nutrition_facts_table_content').innerText,
-        novaScore: document.querySelector('.grade_unknown_title').innerText,
-    };
+        return {
+                title: document.querySelector('.title-1').innerText,
+
+                quantity: document.querySelector('#field_quantity_value').innerText,
+
+                ingredientsList: ingredientsList,
+
+                nutritionScore: document.querySelector('.grade_d_title.attr_title').innerText,
+
+                nutritionServingSize: document.querySelector('#panel_nutrition_facts_table_content').innerText,
+
+                novaScore: document.querySelector('.grade_e_title.attr_title').innerText,
+
+                novaTitle: document.querySelector('#panel_nova').innerText,
+
+            };
 });
 
 ```
@@ -191,18 +230,30 @@ const puppeteer = require('puppeteer');
 **// ... (Detalhes do produto extraídos)**
 
 ```
-res.send({
-
-      "Título": productDetails.title,
-    "Quantidade": productDetails.quantity,
-    "Categoria": productDetails.category,
-    "Ingredientes": productDetails.ingredientsList,
-    "Nutrição": productDetails.nutritionScore,
-    "Valores Nutricionais": productDetails.values,
-    "Dados Nutricionais": productDetails.servingSize,
-    "Nova score": productDetails.novaScore,
-    
+res.json({
+            titulo: productDetails.title,
+            Quantidade: productDetails.quantity,
+            Ingredientes: {
+                lista: productDetails.ingredientsList,
+            },
+            Nutrição: {
+                score: productDetails.nutritionScore,
+                values: productDetails.nutritionValues,
+                servingSize: productDetails.nutritionServingSize,
+            },
+            nova: {
+                score: productDetails.novaScore,
+                title: productDetails.novaTitle
+            }
+        });
 })
+
+**// ...Mensagem de erro**
+} catch (error) {
+        console.error('Erro:', error);
+        res.status(500).send('Ocorreu um erro ao processar a solicitação.');
+    }
+
 });
 
 ```
@@ -215,7 +266,7 @@ server.listen(7777, () => {
 ```
   **//Abra o terminal e Execute o servidor:**
   _bash_
-  => **_node server.js_**
+  => **_node detl.js_**
 
 
 **//Acesse o servidor no navegador:**
@@ -225,11 +276,15 @@ server.listen(7777, () => {
 
 # Como é feito a busca de produtos ?
 
-=> Para fazer a busca do Produto vai no site https://br.openfoodfacts.org Pega o id de qualquer produto desejado;
+=> Para o 'index.js'  vai no site https://br.openfoodfacts.org Pega o id de qualquer produto desejado e coloca no terminal ao ser solicitado.
 
-=> Depois é só colar o id dentro do código na função
+=> Para o 'detl.js' é só colar o id dentro do código na função
 ```
- const id = '**Colar o id de qualquer produto aqui**';
+ const id = 'Colar o id de qualquer produto aqui';
  await page.goto('https://br.openfoodfacts.org/produto/${id}');
- console.log('\nFui para a url!' ); Para poder obter os detalhes deste produto.
+ console.log('\nFui para a url!' ); Para poder obter os detalhes do produto pertencente a este ID;
 ```
+
+
+//Gostei muito de fazer este trabalho ganhei várias experências no desenrolar do código, Não foi difícil elaborar este trabalho mas tive algumas dificuldades considerados normais.
+//OBS: Ouve Classes que não se tinha encontrado no site.
